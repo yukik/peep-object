@@ -1,0 +1,49 @@
+
+.peep_peepObject    {font-size: 70%;}
+.peep_peepObject li {
+  list-style-type: none;
+  white-space: nowrap;
+}
+
+.peep_readonly>span  {text-decoration: underline;}
+.peep_disconfig>span {font-weight: bold;}
+.peep_accessor>span,
+.peep_proto>span     {font-style: italic;}
+
+
+.peep_undefined,
+.peep_null,
+.peep_boolean,
+.peep_number,
+.peep_string,
+.peep_date,
+.peep_regexp        {color: #1abc9c;}
+
+.peep_function      {color: #e67e22;}
+
+.peep_error         {color: #c0392b;}
+
+.peep_window        {color: #f1c40f;}
+
+.peep_node          {color: #9b59b6;}
+
+.peep_jQuery,
+.peep_array         {color: #3498db;}
+
+.peep_object        {color: #e74c3c;}
+
+
+.peep_selected>span,
+.peep_selectedEl    {background-color: #bdc3c7}
+
+.peep_isRef         {color: #c0392b;}
+.peep_blind         {color: #c8c8c8;}
+
+.peep_unexpanded>ul,
+.peep_hidden_blind,
+.peep_hidden_proto,
+.peep_hidden_disconfig {display: none;}
+
+.peep_enable_blind,
+.peep_enable_proto,
+.peep_enable_disconfig {font-weight: bold;}

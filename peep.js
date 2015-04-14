@@ -11,16 +11,17 @@
  * prefixを指定すると各エレメントに設定されるクラスに接頭語を指定します
  * 省略時は'peep_'です
  * omissionsを指定すると、__proto__を表示しないオブジェクトを増やす事ができます
- * 省略時はObject.prototypeとjQueryです
+ * 規定ではObject.prototypeとjQueryのみが対象です
+
  * 
- * @method main
+ * @method peep
  * @param  {Object}  obj
  * @param  {Object} options
- *             {Element} placeEl   挿入先
- *             {String}  prefix    クラスの接頭語(省略時 peep_)
+ *             {Element} placeEl   挿入先 (省略時 document.body)
+ *             {String}  prefix    クラスの接頭語、cssで使用(省略時 peep_) 
  *             {Array}   omissions 省略するオブジェクト
  */
-var peep = (function () {
+window.peep = (function () {
 
   function main (obj, options) {
 
@@ -48,8 +49,11 @@ var peep = (function () {
       getLiFunction:getLiFunction,
       getLiNode:getLiNode,
       getLijQuery:getLijQuery,
+      getUljQuery:getUljQuery,
       getLiArray:getLiArray,
+      getUlArray:getUlArray,
       getLiObject:getLiObject,
+      getUlObject:getUlObject,
       createLi:createLi,
       openAllButton: openAllButton,
       closeAllButton:closeAllButton,
@@ -57,25 +61,82 @@ var peep = (function () {
       hiddenButton:hiddenButton
     };
 
-    peep(self);
+    peepObject(self);
   }
 
   /**
    * ノード作成
-   * @method peep
+   * @method peepObject
    * @param  {Object} self
    */
-  function peep (self) {
+  function peepObject (self) {
 
-    var ul = self.getUl(self.obj);
     var prefix = self.prefix;
 
-    var lastRef;
-    var lastEl;
+    var ul = self.getUl(self.obj);
+    ul.setAttribute('class', prefix + 'peepObject');
+
+
+    $(ul).delegate('.' + prefix + 'isRef', 'click', addNode(self));
 
     // ツリーを開く・閉じる
-    var unexpanded = prefix + 'unexpanded';
-    $(ul).delegate('.' + prefix + 'toggle', 'click', function () {
+    $(ul).delegate('.' + prefix + 'toggle', 'click', toggleNode(self));
+
+    // コンソール出力・ハイライト
+    $(ul).delegate('li', 'click', clickLi(self, ul));
+
+    // 各ボタンの作成
+    self.placeEl.appendChild(self.openAllButton(ul));
+    self.placeEl.appendChild(self.closeAllButton(ul));
+    self.placeEl.appendChild(self.autoOpenCheck());
+    self.placeEl.appendChild(self.hiddenButton(ul, 'proto'));
+    self.placeEl.appendChild(self.hiddenButton(ul, 'blind'));
+    self.placeEl.appendChild(self.hiddenButton(ul, 'disconfig'));
+
+    self.placeEl.appendChild(ul);
+  }
+
+  function addNode(self) {
+    var obj = self.obj.root;
+    var prefix = self.prefix;
+    return function () {
+      var parent = this.parentNode;
+      var path = getPath(parent.title);
+      var value = getValue(obj, path, true);
+      var ul;
+      switch(getType(value)) {
+      case 'function':
+        return true;
+      case 'jQuery':
+        ul = self.getUljQuery(value, path);
+        break;
+      case 'array':
+        ul = self.getUlArray(value, path);
+        break;
+      case 'object':
+        ul = self.getUlObject(value, path);
+        break;
+      default:
+        return true;
+      }
+      var toggleSpan = $('<span class="'+ prefix + 'toggle">[ - ]</span>');
+      $('.' + prefix + 'value', parent).before(toggleSpan);
+      $(parent).addClass(prefix + 'expandable').removeClass(prefix + 'ref');
+      parent.removeChild(this);
+      parent.appendChild(ul);
+      return false;
+    };
+  }
+
+  /**
+   * ノードを開閉する
+   * @method toggleNode
+   * @param  {Object}   self
+   * @return {Function} callback
+   */
+  function toggleNode (self) {
+    var unexpanded = self.prefix + 'unexpanded';
+    return function () {
       var el = $(this);
       var parant = $(this.parentNode);
       if (parant.hasClass(unexpanded)){
@@ -86,46 +147,33 @@ var peep = (function () {
         el.text('[ + ]');
       }
       return false;
-    });
+    };
+  }
 
+
+  /**
+   * クリックしたノードの値をコンソールに出力します
+   * 
+   * 関数、jQuery、配列、オブジェクトをクリックした際に、同じ参照先を持つノードを
+   * ハイライト表示します
+   * open autoをonにしている場合は、閉じているノードを自動的に開く
+   */
+  function clickLi (self, ul) {
+    var lastRef;
+    var lastEl;
+    var prefix = self.prefix;
     var selected   = prefix + 'selected';
     var selectedEl = prefix + 'selectedEl';
+    var unexpanded = prefix + 'unexpanded';
 
-    /**
-     * クリックしたノードの値をコンソールに出力します
-     * 
-     * 関数、jQuery、配列、オブジェクトをクリックした際に、同じ参照先を持つノードを
-     * ハイライト表示します
-     * open autoをonにしている場合は、閉じているノードを自動的に開く
-     */
-    $(ul).delegate('li', 'click', function () {
+    return function () {
       var title = this.title;
       // コンソール出力
       if (title && typeof console === 'object') {
-        var peep = self.obj.root;
-        title.split(/[\[\]]/).reduce(function(x, y){
-          if (!y.length){
-            return x;
-          }
-          if (y[0] === '\'') {
-            x.push(y.replace(/\'/g, ''));
-          } else {
-            var z = y.split('.').filter(function(x){return x.length;});
-            if (z.length) {
-              x = x.concat(z);
-            }
-          }
-          return x;
-        },[]).some(function (p, i, s) {
-          if (p === '__proto__') {
-            if (i + 1 === s.length) {
-              peep = Object.getPrototypeOf(peep);
-            }
-          } else {
-            peep = peep[p];
-          }
-        });
-        console.log(peep);
+        var path = getPath(title);
+        var peeped = getValue(self.obj.root, path);
+        console.log(peeped);
+        window.peeped = peeped;
       }
       // ハイライト表示
       var r = this.getAttribute('data-ref');
@@ -159,19 +207,7 @@ var peep = (function () {
         }
       }
       return false;
-    });
-
-    ul.setAttribute('class', prefix + 'peepObject');
-
-    // 各ボタンの作成
-    self.placeEl.appendChild(self.openAllButton(ul));
-    self.placeEl.appendChild(self.closeAllButton(ul));
-    self.placeEl.appendChild(self.autoOpenCheck());
-    self.placeEl.appendChild(self.hiddenButton(ul, 'proto'));
-    self.placeEl.appendChild(self.hiddenButton(ul, 'blind'));
-    self.placeEl.appendChild(self.hiddenButton(ul, 'disconfig'));
-
-    self.placeEl.appendChild(ul);
+    };
   }
 
   /**
@@ -336,12 +372,7 @@ var peep = (function () {
 
     names.forEach(function (name) {
       var classes = isArray ? [] : getClasses(obj, name);
-      var value;
-      try {
-        value = obj[name];
-      }catch (e) {
-        value = 'Getter/Setter';
-      }
+      var value = ~classes.indexOf('accessor') ? 'Getter/Setter' : obj[name];
       var li = self.getLi(name, value, [], classes);
       ul.appendChild(li);
     });
@@ -462,11 +493,9 @@ var peep = (function () {
     default:
       tag = 'NODE_TYPE(' + value.nodeType + ')';
       data = '';
+      console.log(value.nodeType);
     }
-    if (!data && typeof console === 'object') {
-      console.log(Object.getOwnPropertyNames(value));
-    }
-    
+
     if (20 < data.length) {
       data = data.substring(0, 21) + '...';
     }
@@ -537,18 +566,31 @@ var peep = (function () {
       li = self.createLi(name, '[jQuery] (' + len + ')', path, false);
       classes.push('expandable');
       if (len) {
-        var ul = document.createElement('ul');
-        var p;
-        for(var i = 0; i < len; i++) {
-          p = [].slice.call(path);
-          p.push(i);
-          ul.appendChild(self.getLi('[' + i + ']', value[i], p));
-        }
-        li.appendChild(ul);
+        li.appendChild(self.getUljQuery(value, path));
       }
     }
     li.setAttribute('data-ref', idx);
     return li;
+  }
+
+  /**
+   * jQueryタイプの子要素のULエレメントを作成
+   * @method getUljQuery
+   * @param  {jQuery}    value
+   * @param  {Array}     path
+   * @return {Element}   ul
+   */
+  function getUljQuery (value, path) {
+    var self = this;
+    var ul = document.createElement('ul');
+    var len = value.length;
+    var p;
+    for(var i = 0; i < len; i++) {
+      p = [].slice.call(path);
+      p.push(i);
+      ul.appendChild(self.getLi('[' + i + ']', value[i], p));
+    }
+    return ul;
   }
 
   /**
@@ -575,17 +617,29 @@ var peep = (function () {
       li = self.createLi(name, '[Array] (' + len + ')', path, false, 0 === len);
       classes.push('expandable');
       if (len) {
-        var ul = document.createElement('ul');
-        value.forEach(function (item, i){
-          var p = [].slice.call(path);
-          p.push(i);
-          ul.appendChild(self.getLi('[' + i + ']', item, p));
-        });
-        li.appendChild(ul);
+        li.appendChild(self.getUlArray(value, path));
       }
     }
     li.setAttribute('data-ref', idx);
     return li;
+  }
+
+  /**
+   * 配列タイプの子要素のULエレメントを作成
+   * @method getUlArray
+   * @param  {jQuery}    value
+   * @param  {Array}     path
+   * @return {Element}   ul
+   */
+  function getUlArray (value, path) {
+    var self = this;
+    var ul = document.createElement('ul');
+    value.forEach(function (item, i){
+      var p = [].slice.call(path);
+      p.push(i);
+      ul.appendChild(self.getLi('[' + i + ']', item, p));
+    });
+    return ul;
   }
 
   /**
@@ -604,7 +658,6 @@ var peep = (function () {
     var li;
     var proto = Object.getPrototypeOf(value);
     var keys = Object.getOwnPropertyNames(value);
-    var omit = ~self.omissions.indexOf(proto);
     var ctorName = value.constructor ? value.constructor.name : 'constructor null';
     if (~idx) {
       li = self.createLi(name, '[' + ctorName + ']', path, true);
@@ -612,32 +665,13 @@ var peep = (function () {
     } else {
       idx = ref.length;
       ref.push(value);
-      
       if (keys.length || proto !== Object.prototype) {
         var unexpandable = !keys.length && proto === null;
         li = self.createLi(name, '[' + ctorName + ']', path, false, unexpandable);
         if (!unexpandable) {
           classes.push('expandable');
         }
-        var ul = document.createElement('ul');
-        keys.forEach(function(name){
-          var classes = getClasses (value, name);
-          var item;
-          try {
-            item = value[name];
-          } catch(e){
-            item = 'Getter/Setter';
-          }
-          var p = [].slice.call(path);
-          p.push(name);
-          ul.appendChild(self.getLi(name, item, p, classes));
-        });
-        if (!omit) {
-          var p2 = [].slice.call(path);
-          p2.push('__proto__');
-          ul.appendChild(self.getLi('__proto__', proto, p2, ['proto']));
-        }
-        li.appendChild(ul);
+        li.appendChild(self.getUlObject(value, path));
       } else {
         li = self.createLi(name, '[' + ctorName + '] {}', path);
       }
@@ -646,7 +680,33 @@ var peep = (function () {
     return li;
   }
 
-  var RAG_NORMAL = /^[_$a-z][_$a-z0-9]*$/i;
+  /**
+   * オブジェクトタイプの子要素のULエレメントを作成
+   * @method getUlObject
+   * @param  {Object}    value
+   * @param  {Array}     path
+   * @return {Element}   ul
+   */
+  function getUlObject (value, path) {
+    var self = this;
+    var keys = Object.getOwnPropertyNames(value);
+    var proto = Object.getPrototypeOf(value);
+    var omit = ~self.omissions.indexOf(proto);
+    var ul = document.createElement('ul');
+    keys.forEach(function(name){
+      var classes = getClasses (value, name);
+      var item = ~classes.indexOf('accessor') ? 'Getter/Setter' : value[name];
+      var p = [].slice.call(path);
+      p.push(name);
+      ul.appendChild(self.getLi(name, item, p, classes));
+    });
+    if (!omit) {
+      var p2 = [].slice.call(path);
+      p2.push('__proto__');
+      ul.appendChild(self.getLi('__proto__', proto, p2, ['proto']));
+    }
+    return ul;
+  }
 
   /**
    * LIエレメントの作成
@@ -667,7 +727,21 @@ var peep = (function () {
       html += '<span class="' + prefix + 'isRef"> -&gt; ref</span>';
     }
     li.innerHTML = html;
-    var title = path.reduce(function(x,y) {
+    li.title = getTitle(path);
+    return li;
+  }
+
+  // アクセスの方法が.であるものの正規表現
+  var RAG_NORMAL = /^[_$a-z][_$a-z0-9]*$/i;
+
+  /**
+   * パスからタイトルを作成する
+   * @method getTitle
+   * @param  {Array}  path
+   * @return {String} title
+   */
+  function getTitle (path) {
+    return path.reduce(function(x, y) {
       var normal = String(y).match(RAG_NORMAL);
       if (!normal) {
         y =  typeof y === 'number' ? '[' + y + ']' : '[\'' + y + '\']';
@@ -676,8 +750,52 @@ var peep = (function () {
       }
       return x + y;
     }, '');
-    li.title = title;
-    return li;
+  }
+
+  /**
+   * タイトルからパスを作成する
+   * @method getPath
+   * @param  {Stroing} title
+   * @return {Array}   path
+   */
+  function getPath (title) {
+    return title.split(/[\[\]]/).reduce(function(x, y){
+      if (!y.length){
+        return x;
+      }
+      if (y[0] === '\'') {
+        x.push(y.replace(/\'/g, ''));
+      } else if (/[0-9]/.test(y[0])){
+        x.push(Number(y));
+      } else {
+        var z = y.split('.').filter(function(x){return x.length;});
+        if (z.length) {
+          x = x.concat(z);
+        }
+      }
+      return x;
+    },[]);
+  }
+
+  /**
+   * オブジェクトを取得する
+   * @method getValue
+   * @param  {Object}  obj
+   * @param  {Array}   path
+   * @param  {Boolean} noSkip
+   * @return {Mixed}   result
+   */
+  function getValue (obj, path, noSkip) {
+    path.some(function (p, i, s) {
+      if (p === '__proto__') {
+        if (i + 1 === s.length || noSkip) {
+          obj = Object.getPrototypeOf(obj);
+        }
+      } else {
+        obj = obj[p];
+      }
+    });
+    return obj;
   }
 
   /**
